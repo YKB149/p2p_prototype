@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Share - Upload</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Roboto', sans-serif;
+        }
+
+        body {
+            background: #f5f6fa;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 500px;
+            text-align: center;
+        }
+
+        h1 {
+            color: #2d3436;
+            margin-bottom: 1.5rem;
+            font-size: 1.8rem;
+        }
+
+        .upload-area {
+            border: 2px dashed #b2bec3;
+            border-radius: 10px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .upload-area:hover {
+            border-color: #00b894;
+        }
+
+        .upload-area.dragover {
+            background: #e0f7f4;
+            border-color: #00b894;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        #uploadButton {
+            background: #00b894;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 1rem;
+        }
+
+        #uploadButton:hover {
+            background: #00a187;
+            transform: translateY(-2px);
+        }
+
+        #uploadButton:disabled {
+            background: #b2bec3;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        #progressContainer {
+            width: 100%;
+            background: #e0e0e0;
+            border-radius: 10px;
+            margin: 1.5rem 0;
+            overflow: hidden;
+            height: 6px;
+        }
+
+        #progressBar {
+            width: 0%;
+            height: 100%;
+            background: #00b894;
+            transition: width 0.3s ease;
+        }
+
+        #status {
+            color: #636e72;
+            margin-top: 1rem;
+        }
+
+        .error {
+            color: #d63031;
+        }
+
+        #linkDisplay {
+            margin-top: 1rem;
+            word-break: break-all;
+        }
+
+        #linkDisplay a {
+            color: #00b894;
+            text-decoration: none;
+        }
+
+        #linkDisplay a:hover {
+            text-decoration: underline;
+        }
+
+        .selected-file {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 10px;
+            margin-top: 1rem;
+            display: none;
+        }
+
+        .selected-file.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Share Your Files Securely</h1>
+        <h3>Made by Yash</h3>
+        
+        <div class="upload-area" id="dropZone">
+            <p>Drag and drop your file here</p>
+            <p>or</p>
+            <button id="uploadButton">Choose File</button>
+            <input type="file" id="fileInput" style="display: none;">
+        </div>
+
+        <div class="selected-file" id="selectedFile">
+            <p id="fileName"></p>
+            <p id="fileSize"></p>
+        </div>
+
+        <div id="progressContainer">
+            <div id="progressBar"></div>
+        </div>
+
+        <p id="status">No upload in progress.</p>
+        <p id="linkDisplay"></p>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>
+        const CHUNK_SIZE = 1024 * 1024; // 1MB chunks
+        const socket = io();
+        
+        const dropZone = document.getElementById("dropZone");
+        const uploadButton = document.getElementById("uploadButton");
+        const fileInput = document.getElementById("fileInput");
+        const progressBar = document.getElementById("progressBar");
+        const status = document.getElementById("status");
+        const linkDisplay = document.getElementById("linkDisplay");
+        const selectedFile = document.getElementById("selectedFile");
+        const fileName = document.getElementById("fileName");
+        const fileSize = document.getElementById("fileSize");
+
+        // Handle click on the upload button to trigger file input
+        uploadButton.addEventListener("click", () => {
+            fileInput.click();
+        });
+
+        // Handle file selection
+        fileInput.addEventListener("change", () => {
+            const file = fileInput.files[0];
+            if (file) {
+                showSelectedFile(file);
+            }
+        });
+
+        // Handle drag and drop
+        dropZone.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            dropZone.classList.add("dragover");
+        });
+
+        dropZone.addEventListener("dragleave", () => {
+            dropZone.classList.remove("dragover");
+        });
+
+        dropZone.addEventListener("drop", (e) => {
+            e.preventDefault();
+            dropZone.classList.remove("dragover");
+            
+            const file = e.dataTransfer.files[0];
+            if (file) {
+                fileInput.files = e.dataTransfer.files;
+                showSelectedFile(file);
+            }
+        });
+
+        function showSelectedFile(file) {
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            selectedFile.classList.add("show");
+            uploadFile(file);
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        async function uploadFile(file) {
+            if (!file) {
+                status.textContent = "Please select a file first.";
+                status.className = "error";
+                return;
+            }
+
+            try {
+                uploadButton.disabled = true;
+                status.className = "";
+                
+                // Generate upload link
+                const linkResponse = await fetch("/generate-link", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ filename: file.name })
+                });
+                const linkData = await linkResponse.json();
+                const uniqueId = linkData.link.split("/").pop();
+
+                // Listen for progress updates
+                socket.on(`upload_progress_${uniqueId}`, (data) => {
+                    progressBar.style.width = `${data.progress}%`;
+                    status.textContent = `Uploading: ${Math.round(data.progress)}%`;
+                });
+
+                // Split file into chunks
+                const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+                
+                for (let chunk = 0; chunk < totalChunks; chunk++) {
+                    const start = chunk * CHUNK_SIZE;
+                    const end = Math.min(start + CHUNK_SIZE, file.size);
+                    const fileChunk = file.slice(start, end);
+
+                    const formData = new FormData();
+                    formData.append("file", fileChunk);
+                    formData.append("chunk", chunk);
+                    formData.append("total_chunks", totalChunks);
+
+                    const response = await fetch(`/upload/${uniqueId}`, {
+                        method: "POST",
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Upload failed: ${response.statusText}`);
+                    }
+                }
+
+                status.textContent = "Upload complete!";
+                status.className = "success";
+                linkDisplay.innerHTML = `Share this link: <a href="${linkData.link}">${window.location.origin}${linkData.link}</a>`;
+                
+            } catch (error) {
+                status.textContent = `Error: ${error.message}`;
+                status.className = "error";
+                progressBar.style.width = "0%";
+            } finally {
+                uploadButton.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
