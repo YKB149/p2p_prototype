@@ -8,7 +8,7 @@ import mimetypes
 
 app = Flask(__name__)
 app.config["UPLOAD_FOLDER"] = "uploads"
-app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024 * 1024  # 1GB max file size
+app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024 * 1024  
 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
 socketio = SocketIO(app, cors_allowed_origins="*")
