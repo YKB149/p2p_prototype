@@ -1,3 +1,8 @@
+# This program is to be used only for education purpose only 
+#while using this source code pls have permission of owner to avoid copyright infringement
+
+
+
 from flask import Flask, render_template, request, jsonify, send_file, Response
 from flask_socketio import SocketIO
 from flask_cors import CORS
